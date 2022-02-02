@@ -24,15 +24,15 @@ import XcodeHasher
 /// Helper methods to locate Xcode's Log directory and its content
 public struct LogFinder {
 
-    let buildDirSettingsPrefix = "BUILD_DIR = "
+    let buildDirSettingsPrefix: String
 
-    let xcodebuildPath = "/usr/bin/xcodebuild"
+    let xcodebuildPath: String
 
-    let logsDir = "/Logs/Build/"
+    let logType: LogType
 
-    let logManifestFile = "LogStoreManifest.plist"
+    let logManifestFile: String
 
-    let emmptyDirResponseMessage = """
+    let emptyDirResponseMessage = """
     Error. Couldn't find the derived data directory.
     Please use the --filePath option to specify the path to the xcactivitylog file you want to parse.
     """
@@ -44,7 +44,17 @@ public struct LogFinder {
         return homeDirURL.appendingPathComponent("Library/Developer/Xcode/DerivedData", isDirectory: true)
     }
 
-    public init() {}
+    public init(
+        buildDirSettingsPrefix: String = "BUILD_DIR = ",
+        xcodebuildPath: String = "/usr/bin/xcodebuild",
+        logType: LogType  = .build,
+        logManifestFile: String = "LogStoreManifest.plist"
+    ) {
+        self.buildDirSettingsPrefix = buildDirSettingsPrefix
+        self.xcodebuildPath = xcodebuildPath
+        self.logType = logType
+        self.logManifestFile = logManifestFile
+    }
 
     public func findLatestLogWithLogOptions(_ logOptions: LogOptions) throws -> URL {
         guard logOptions.xcactivitylogPath.isEmpty else {
@@ -111,8 +121,8 @@ public struct LogFinder {
         // when xcodebuild is run with -derivedDataPath the logs are at the root level
         if logOptions.derivedDataPath.isEmpty == false {
             if FileManager.default.fileExists(atPath:
-                derivedData.appendingPathComponent(logsDir).path) {
-                return derivedData.appendingPathComponent(logsDir)
+                                                derivedData.appendingPathComponent(logType.path).path) {
+                return derivedData.appendingPathComponent(logType.path)
             }
         }
         if logOptions.projectLocation.isEmpty == false {
@@ -185,7 +195,7 @@ public struct LogFinder {
                 with --file or the right DerivedData folder with --derived_data
                 """)
         }
-        return match.appendingPathComponent(logsDir)
+        return match.appendingPathComponent(logType.path)
     }
 
     /// Gets the full path of the Build/Logs directory for the given project
@@ -199,7 +209,7 @@ public struct LogFinder {
         if let result = try executeXcodeBuild(args: arguments) {
             return try parseXcodeBuildDir(result)
         }
-        throw LogError.xcodeBuildError(emmptyDirResponseMessage)
+        throw LogError.xcodeBuildError(emptyDirResponseMessage)
     }
 
     /// Gets the latest xcactivitylog file path for the given projectFolder
@@ -248,7 +258,7 @@ public struct LogFinder {
         if let result = try executeXcodeBuild(args: arguments) {
             return try parseXcodeBuildDir(result)
         }
-        throw LogError.xcodeBuildError(emmptyDirResponseMessage)
+        throw LogError.xcodeBuildError(emptyDirResponseMessage)
     }
 
     /// Returns the latest xcactivitylog file path in the given directory
@@ -284,7 +294,7 @@ public struct LogFinder {
             .replacingOccurrences(of: ".xcworkspace", with: "")
             .replacingOccurrences(of: ".xcodeproj", with: "")
         let hash = try XcodeHasher.hashString(for: path.string)
-        return "\(projectName)-\(hash)".appending(logsDir)
+        return "\(projectName)-\(hash)".appending(logType.path)
     }
 
     private func executeXcodeBuild(args: [String]) throws -> String? {
@@ -315,8 +325,8 @@ public struct LogFinder {
         if let settings = buildDirSettings.first {
             return settings.trimmingCharacters(in: .whitespacesAndNewlines)
                 .replacingOccurrences(of: buildDirSettingsPrefix, with: "")
-                .replacingOccurrences(of: "Build/Products", with: logsDir)
+                .replacingOccurrences(of: "Build/Products", with: logType.path)
         }
-        throw LogError.xcodeBuildError(emmptyDirResponseMessage)
+        throw LogError.xcodeBuildError(emptyDirResponseMessage)
     }
 }
